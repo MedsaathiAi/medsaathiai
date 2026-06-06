@@ -185,7 +185,7 @@ function ChatPane({feature, profileCtx=""}) {
         body: JSON.stringify({model:"claude-sonnet-4-20250514", max_tokens:1500, system:feature.prompt, messages:[...histMsgs, {role:"user", content:userContent}]})
       });
       const data = await res.json();
-      const reply = data.content && data.content.map(b => b.text||"").join("") || "Sorry, dobara try karein.";
+      const reply = JSON.stringify(data);
       setMsgs(prev => [...prev, {role:"assistant", content:reply}]);
     } catch(e) {
       setMsgs(prev => [...prev, {role:"assistant", content:"⚠️ Network error. Please try again."}]);
