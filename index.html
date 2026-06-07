@@ -270,7 +270,7 @@ function ChatPane({feature, profileCtx=""}) {
     "Content-Type": "application/json"
   },
   body: JSON.stringify({
-    model: "claude-opus-4-1",
+    model: "claude-3-7-sonnet-latest
     max_tokens: 1600,
     system: feature.prompt,
     messages: [...histMsgs, { role: "user", content: userContent }]
