@@ -185,7 +185,9 @@ function ChatPane({feature, profileCtx=""}) {
         body: JSON.stringify({model:"claude-opus-4-8", max_tokens:1600, system:feature.prompt, messages:[...histMsgs, {role:"user", content:userContent}]})
       });
       const data = await res.json();
-      const reply = data.content?.[0]?.text || "No response";
+      const reply = data.content && data.content.length
+  ? data.content[0].text
+  : "No response";
       setMsgs(prev => [...prev, {role:"assistant", content:reply}]);
     } catch(e) {
       setMsgs(prev => [...prev, {role:"assistant", content:"⚠️ Network error. Please try again."}]);
