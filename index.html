@@ -182,10 +182,10 @@ function ChatPane({feature, profileCtx=""}) {
       const histMsgs = msgs.filter(m => !m.imgPreview).map(m => ({role:m.role, content:m.content}));
       const res = await fetch("/api/chat", {
         method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({model:"claude-3-7-sonnet-latest", max_tokens:1600, system:feature.prompt, messages:[...histMsgs, {role:"user", content:userContent}]})
+        body: JSON.stringify({model:"claude-sonnet-4-20250514", max_tokens:1600, system:feature.prompt, messages:[...histMsgs, {role:"user", content:userContent}]})
       });
       const data = await res.json();
-      const reply = JSON.stringify(data);
+      const reply =   data?.content?.[0]?.text ||   data?.error?.message ||   JSON.stringify(data);
       setMsgs(prev => [...prev, {role:"assistant", content:reply}]);
     } catch(e) {
       setMsgs(prev => [...prev, {role:"assistant", content:"⚠️ Network error. Please try again."}]);
