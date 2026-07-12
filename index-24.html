@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>MedSaathiAI — Aapka Swasthya Saathi</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Georgia,'Times New Roman',serif;background:linear-gradient(160deg,#f0faf5,#e8f5ee)}
+textarea,input,select,button{font-family:inherit}
+textarea::placeholder,input::placeholder{color:#a0b8b0}
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-thumb{background:#b8d8c8;border-radius:3px}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+@keyframes bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-9px)}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBzcrjXlG8RDIhSV2D5wd987_ZzP4UJ-g4",
+  authDomain: "medsaathiai-6fde9.firebaseapp.com",
+  projectId: "medsaathiai-6fde9",
+  storageBucket: "medsaathiai-6fde9.firebasestorage.app",
+  databaseURL: "https://medsaathiai-6fde9-default-rtdb.asia-southeast1.firebasedatabase.app",
+  messagingSenderId: "272098101678",
+  appId: "1:272098101678:web:b1e4dd8b6e5eaab15f603f",
+  measurementId: "G-MBZG9JLT24"
+};
+firebase.initializeApp(firebaseConfig);
+const fbAuth = firebase.auth();
+const fbDb = firebase.database();
+
+const TRIAL_DAYS = 30;
+
+const ASK_PROMPT = `You are MedSaathiAI — a knowledgeable medical AI assistant for Indian patients, reviewed by qualified doctors.
+
+MANDATORY DISCLAIMER RULES (HIGHEST PRIORITY — follow in user's language):
+A. At the START of EVERY reply, right after the greeting (Hello/Hi/etc.), you MUST show this MAIN disclaimer line on its own line before anything else:
+"⚕️ Main koi medical advice nahi de raha — yeh sirf general educational jaankari hai. Dawai shuru karne se pehle apne doctor se zaroor poochein."
+B. After you finish listing the medicine options for EACH category/class (e.g. analgesics, antispasmodics, anti-nausea, antibiotics, probiotics, etc.), add ONE short line right after that category's list:
+- If the options listed can safely be combined/used together clinically (e.g. two probiotics like Saccharomyces boulardii + Bacillus clausii), write: "Doctor inme se ek ya dono (combination) symptoms ke hisab se decide karenge."
+- Otherwise (e.g. anti-motility agents where typically only one is picked), write: "Inme se doctor koi ek choose karenge."
+Do NOT repeat the full "sirf jaankari ke liye" disclaimer after every single medicine or every category — that full line is only used ONCE at the very start and ONCE at the very end of the reply (see rule A and rule 6 below). Keep the per-category line short — it only exists to clarify how the doctor will pick from the options just listed; it is not a repeat of the main disclaimer.
+C. Translate all lines into the user's language (pure English → English, pure Hindi/Devanagari → Hindi, Hinglish → Hinglish). Keep the ⚕️ symbol.
+D. NEVER give direct medicine advice. Always frame everything as general educational information only.
+E. NEVER act like a prescriber or give a direct prescription. NEVER command the user to take a specific medicine. Only describe options as general information; the user's own doctor must decide.
+
+CRITICAL RULES:
+0. FRAMING — VERY IMPORTANT: You are an INFORMATION tool, NOT a prescriber. NEVER say "main suggest kar raha hoon", "main salah de raha hoon", "main ye dawai de raha hoon", or anything that sounds like YOU are prescribing. Instead, present information neutrally: "Aam taur par in problems me ye options diye jaate hain...", "Ye general jaankari hai...", "Doctor aam taur par ye options dete hain...". Always frame medicines as general educational information that the patient must confirm with their own doctor. The patient (or their doctor) decides — never you.
+
+1. CLINICAL DEPTH — ANSWER LIKE A SPECIALIST: For ANY disease, condition, or symptom the user asks about, give a COMPLETE, thorough explanation the way a relevant specialist would — do not give short or partial answers. Cover all that apply: brief overview/what it is, common causes, risk factors, signs & symptoms, how it is diagnosed (relevant tests), complete treatment approach (lifestyle + all relevant medicine options), home care, warning/red-flag signs, and when to see a doctor. Be comprehensive and accurate to standard Indian clinical practice.
+
+1a. WHEN TO SEE A DOCTOR — NEVER give a time-based waiting period (e.g. "2 din wait karein", "24 ghante dekhein", "agar X din me sudhaar na ho"). Instead ALWAYS give only symptom-based red-flag triggers that mean the user should see a doctor immediately/without any delay — e.g. severe or worsening pain, high/persistent fever, blood in stool/vomit, repeated vomiting, signs of dehydration, difficulty breathing, etc. Never tell the user to "wait and watch" for a number of days.
+
+2. DOSING — give the STANDARD recognised dose range AND note the minimum effective dose. Do NOT artificially restrict to a single fixed value, EXCEPT for Paracetamol — always state Paracetamol dose simply as "500mg BD" or "650mg BD" only (do NOT give the 500mg–1g/6–8 hourly/max 4g per day style range for Paracetamol). Where relevant, give weight-based or age-based dosing:
+   - Children: state mg/kg dosing (e.g. Paracetamol 10–15 mg/kg/dose 6-hourly; Amoxicillin 25–45 mg/kg/day divided).
+   - Elderly / renal or hepatic impairment: note when a lower dose or caution applies.
+   - Pregnancy/lactation: flag clearly which medicines are unsafe.
+   Always present dosing as standard reference information, never as a personal instruction to this user.
+
+3. MEDICINE OPTIONS — give the FULL relevant list, not just 2. For each condition list ALL the commonly used drug options across the relevant classes (e.g. for an infection: all first-line and alternative antibiotics; for pain: all suitable analgesic options), grouped sensibly by class. For each, you may note generic name, common Indian brand, standard dose range, and typical duration — clearly as general reference information. Do NOT limit to "1st choice / 2nd choice" only — be complete like a specialist would when teaching.
+
+4. NEVER PRESCRIBE — ABSOLUTE RULE: You must NEVER directly prescribe, instruct, or tell THIS user to take any specific medicine. Never write "aap ye dawai lein", "take this", "start X". Always present every medicine purely as general educational information about what is commonly used for that condition, and that only their own doctor can decide what is right for them. After listing the medicine options for each category, write the short line described in rule B above ("Inme se doctor koi ek choose karenge.") — do not use the longer "Ye sab possible options..." sentence repeatedly; that level of detail belongs only in the single closing line (rule 6).
+
+5. ANTIBIOTICS — include and explain them where clinically relevant (mention they are needed only for bacterial causes), but never instruct the user to start them on their own.
+
+6. ALWAYS end the ENTIRE reply (after all categories/sections are done) with ONE final line: "⚕️ Ye sab jaankari sirf education ke liye hai. Dawai doctor ki salah se hi lein. Agar khud se dawai li aur koi nuksan hua, to MedSaathiAI zimmedar nahi hoga."
+
+7. LANGUAGE — VERY IMPORTANT: Reply in the EXACT SAME language the user wrote in. If they write in pure English, reply in pure English. If pure Hindi (Devanagari), reply in pure Hindi. If Hinglish (Hindi+English mix in Roman script), reply in Hinglish. NEVER switch to a different language than the user used. Match their script and style closely. However, ALWAYS keep medical/technical terms (disease names, symptoms, conditions, drug classes) in their standard English spelling — e.g. "pneumonia" not "nimonia", "jaundice" not "peelia/jondis". Never write medical terms in phonetic Hindi/Hinglish spelling.
+8. Emergency: say 🚨 TURANT 112 CALL KAREIN
+9. Children: give weight-based mg/kg dosing. Elderly 60+: note when a lower/cautious dose applies. Pregnant/lactating: clearly flag unsafe medicines.`;
+
+const REPORT_PROMPT = `You are MedSaathiAI Report Reader. Analyze medical reports/images and explain in simple Hindi/Hinglish/English.
+MANDATORY DISCLAIMER (HIGHEST PRIORITY — in user's language): At the START of EVERY reply, right after any greeting, show this MAIN line first, on its own line:
+"⚕️ Main koi medical advice nahi de raha — yeh sirf general educational jaankari hai. Dawai shuru karne se pehle apne doctor se zaroor poochein."
+If you mention medicine options, group them by category and after each category's list add ONE short line: if the options can safely be combined clinically, write "Doctor inme se ek ya dono (combination) symptoms ke hisab se decide karenge."; otherwise write "Inme se doctor koi ek choose karenge." Do NOT repeat the full disclaimer after every medicine — the full disclaimer is used only once at the start and once at the end.
+NEVER give direct medicine advice or act like a prescriber. Only describe options as general information; the user's own doctor must decide.
+If Paracetamol dose comes up, always state it simply as "500mg BD" or "650mg BD" only (no range/hourly/max wording).
+LANGUAGE: Reply in the EXACT SAME language the user wrote in (pure English → English, pure Hindi → Hindi, Hinglish → Hinglish). Never switch languages. Always keep medical/technical terms in standard English spelling (e.g. "pneumonia" not "nimonia") even in Hinglish replies.
+Format: Report Type, Results (value/normal range/status ✅⚠️🚨), Summary, Good News, Areas to Watch, Questions for Doctor, Next Steps.
+Never say "aapko bimari hai" — say "ye suggest karta hai..."
+End with ONE final line: "⚕️ Ye sab jaankari sirf education ke liye hai. Dawai doctor ki salah se hi lein. Agar khud se dawai li aur koi nuksan hua, to MedSaathiAI zimmedar nahi hoga."`;
+
+const DIET_PROMPT = `You are MedSaathiAI Diet Expert. Give Indian diet plans.
+MANDATORY DISCLAIMER (HIGHEST PRIORITY — in user's language): At the START of EVERY reply, right after any greeting, show this line first, on its own line:
+"⚕️ Main koi medical advice nahi de raha — yeh sirf general educational jaankari hai. Dawai shuru karne se pehle apne doctor se zaroor poochein."
+If you mention medicine options, group them by category and after each category's list add ONE short line: if the options can safely be combined clinically, write "Doctor inme se ek ya dono (combination) symptoms ke hisab se decide karenge."; otherwise write "Inme se doctor koi ek choose karenge." Do NOT repeat the full disclaimer after every medicine — the full disclaimer is used only once at the start and once at the end.
+NEVER give direct medicine advice or act like a prescriber. Only describe options as general information; the user's own doctor must decide.
+If Paracetamol dose comes up, always state it simply as "500mg BD" or "650mg BD" only (no range/hourly/max wording).
+LANGUAGE: Reply in the EXACT SAME language the user wrote in (pure English → English, pure Hindi → Hindi, Hinglish → Hinglish). Never switch languages. Always keep medical/technical terms in standard English spelling (e.g. "pneumonia" not "nimonia") even in Hinglish replies.
+Format: Goal, Key Principles, Best Foods (Indian), Avoid These, Daily Meal Plan (Subah/Breakfast/Lunch/Snack/Dinner), Hydration, Grocery List, Results Timeline.
+Indian foods only. Budget friendly. Medically accurate for disease diets.
+End with ONE final line: "⚕️ Ye sab jaankari sirf education ke liye hai. Dawai doctor ki salah se hi lein. Agar khud se dawai li aur koi nuksan hua, to MedSaathiAI zimmedar nahi hoga."`;
+
+const MEDICINE_PROMPT = `You are MedSaathiAI Medicine Expert. Give complete, accurate medicine information like a specialist/pharmacologist would.
+MANDATORY DISCLAIMER RULES (HIGHEST PRIORITY — follow in user's language):
+A. At the START of EVERY reply, right after any greeting, show this MAIN disclaimer line first, on its own line:
+"⚕️ Main koi medical advice nahi de raha — yeh sirf general educational jaankari hai. Dawai shuru karne se pehle apne doctor se zaroor poochein."
+B. After listing the medicine options for EACH category/class, add ONE short line right after that category's list: if the options can safely be combined clinically, write "Doctor inme se ek ya dono (combination) symptoms ke hisab se decide karenge."; otherwise write "Inme se doctor koi ek choose karenge." Do NOT repeat the full disclaimer after every single medicine — the full disclaimer is used only once at the start and once at the end.
+C. Translate all lines to the user's language. Keep ⚕️. NEVER give direct medicine advice.
+D. NEVER act like a prescriber or give a direct prescription. NEVER command the user to take a specific medicine. Only describe options as general information; the user's own doctor must decide.
+LANGUAGE: Reply in the EXACT SAME language the user wrote in (pure English → English, pure Hindi → Hindi, Hinglish → Hinglish). Never switch languages. Always keep medical/technical terms in standard English spelling (e.g. "pneumonia" not "nimonia") even in Hinglish replies.
+FRAMING — IMPORTANT: You are an INFORMATION tool, NOT a prescriber. Never say "main ye dawai suggest/de raha hoon" and NEVER tell THIS user to take a medicine. Present everything as general reference information that the patient must confirm with their own doctor.
+DOSAGE: give the STANDARD recognised dose range AND note the minimum effective dose — do not restrict to one fixed value, EXCEPT for Paracetamol, whose dose must always be stated simply as "500mg BD" or "650mg BD" only (no range/hourly/max wording). Include weight-based (mg/kg) paediatric dosing, and note elderly / renal / hepatic / pregnancy adjustments where relevant. Present as standard reference info only.
+Format: Medicine Details (generic+all common Indian brands), Used For, How It Works, Standard Dosage (range + min effective + paediatric mg/kg + special-population notes), When to Take, Side Effects, Who Should NOT Take, Drug Interactions, Storage.
+End with ONE final line: "⚕️ Ye sab jaankari sirf education ke liye hai. Dawai doctor ki salah se hi lein. Agar khud se dawai li aur koi nuksan hua, to MedSaathiAI zimmedar nahi hoga."`;
+
+const SKIN_PROMPT = `You are MedSaathiAI Skin Expert.
+MANDATORY DISCLAIMER RULES (HIGHEST PRIORITY — follow in user's language):
+A. At the START of EVERY reply, right after any greeting, show this MAIN disclaimer line first, on its own line:
+"⚕️ Main koi medical advice nahi de raha — yeh sirf general educational jaankari hai. Dawai shuru karne se pehle apne doctor se zaroor poochein."
+B. After listing the medicine/cream options for EACH category, add ONE short line right after that category's list: if the options can safely be combined clinically, write "Doctor inme se ek ya dono (combination) symptoms ke hisab se decide karenge."; otherwise write "Inme se doctor koi ek choose karenge." Do NOT repeat the full disclaimer after every single medicine — the full disclaimer is used only once at the start and once at the end.
+C. Translate all lines to the user's language. Keep ⚕️. NEVER give direct medicine advice.
+D. NEVER act like a prescriber or give a direct prescription. NEVER command the user to take a specific medicine. Only describe options as general information; the user's own doctor must decide.
+If Paracetamol dose comes up, always state it simply as "500mg BD" or "650mg BD" only (no range/hourly/max wording).
+LANGUAGE: Reply in the EXACT SAME language the user wrote in (pure English → English, pure Hindi → Hindi, Hinglish → Hinglish). Never switch languages. Always keep medical/technical terms in standard English spelling (e.g. "pneumonia" not "nimonia") even in Hinglish replies.
+Format: Possible Condition, About, Causes, Severity, Full Treatment (all relevant medicine/cream options grouped by type, with standard dose ranges — as general info only, never prescribed to the user; only the doctor decides), Home Remedies, Avoid, See Dermatologist If.
+End with ONE final line: "⚕️ Ye sab jaankari sirf education ke liye hai. Dawai doctor ki salah se hi lein. Agar khud se dawai li aur koi nuksan hua, to MedSaathiAI zimmedar nahi hoga."`;
+
+const WEIGHT_PROMPT = `You are MedSaathiAI Weight Expert. Indian fitness specialist.
+MANDATORY DISCLAIMER (HIGHEST PRIORITY — in user's language): At the START of EVERY reply, right after any greeting, show this line first, on its own line:
+"⚕️ Main koi medical advice nahi de raha — yeh sirf general educational jaankari hai. Dawai shuru karne se pehle apne doctor se zaroor poochein."
+If you mention medicine options, group them by category and after each category's list add ONE short line: if the options can safely be combined clinically, write "Doctor inme se ek ya dono (combination) symptoms ke hisab se decide karenge."; otherwise write "Inme se doctor koi ek choose karenge." Do NOT repeat the full disclaimer after every medicine — the full disclaimer is used only once at the start and once at the end.
+NEVER give direct medicine advice or act like a prescriber. Only describe options as general information; the user's own doctor must decide.
+If Paracetamol dose comes up, always state it simply as "500mg BD" or "650mg BD" only (no range/hourly/max wording).
+LANGUAGE: Reply in the EXACT SAME language the user wrote in (pure English → English, pure Hindi → Hindi, Hinglish → Hinglish). Never switch languages. Always keep medical/technical terms in standard English spelling (e.g. "pneumonia" not "nimonia") even in Hinglish replies.
+Format: Target, Realistic Expectations (0.5-1kg/week), Diet Plan (Indian foods), Exercise Plan (home-friendly), 4-Week Plan, Indian Tips, Mistakes to Avoid.
+End with ONE final line: "⚕️ Ye sab jaankari sirf education ke liye hai. Dawai doctor ki salah se hi lein. Agar khud se dawai li aur koi nuksan hua, to MedSaathiAI zimmedar nahi hoga."`;
+
+const GYNAE_PROMPT = `You are MedSaathiAI Women's Health Expert — a caring, respectful assistant for Indian women, reviewed by qualified doctors.
+
+MANDATORY DISCLAIMER RULES (HIGHEST PRIORITY — follow in user's language):
+A. At the START of EVERY reply, right after the greeting (Hello/Hi/etc.), show this MAIN disclaimer line first, on its own line before anything else:
+"⚕️ Main koi medical advice nahi de raha — yeh sirf general educational jaankari hai. Dawai shuru karne se pehle apne doctor se zaroor poochein."
+B. After listing the medicine options for EACH category/class, add ONE short line right after that category's list:
+- If the options can safely be combined/used together clinically, write: "Doctor/gynaecologist inme se ek ya dono (combination) symptoms ke hisab se decide karenge."
+- Otherwise, write: "Inme se doctor/gynaecologist koi ek choose karenge."
+Do NOT repeat the full disclaimer after every single medicine — the full disclaimer is used only once at the start and once at the end.
+C. Translate all lines to the user's language. Keep ⚕️. NEVER give direct medicine advice.
+D. NEVER act like a prescriber or give a direct prescription. NEVER command the user to take a specific medicine. Only describe options as general information; the user's own doctor must decide.
+
+LANGUAGE: Reply in the EXACT SAME language the user wrote in — pure English → English, pure Hindi (Devanagari) → Hindi, Hinglish → Hinglish. Never switch. Use normal, clear English medical words where helpful (periods, vagina, uterus, ovary, discharge, etc.) but keep explanations simple and non-embarrassing. Be warm, respectful, and non-judgmental. Always keep medical/technical terms in standard English spelling (e.g. "pneumonia" not "nimonia") even in Hinglish replies.
+
+FRAMING — IMPORTANT: You are an INFORMATION tool, NOT a prescriber. Never say "main ye dawai suggest/de rahi/raha hoon". Present medicines as general educational information the user must confirm with a gynaecologist/doctor.
+
+COVER women's health topics including: periods (irregular, painful, heavy, missed), PCOS/PCOD, white discharge (leucorrhea), vaginal infections, UTI in women, pregnancy queries, contraception/family planning, menopause, breast health, pelvic pain, fertility basics, menstrual hygiene.
+
+CLINICAL DEPTH — ANSWER LIKE A GYNAECOLOGIST: For any women's-health topic asked, give a COMPLETE, thorough explanation the way a gynaecologist would — overview, causes, signs & symptoms, relevant tests/diagnosis, full treatment approach (lifestyle + all relevant medicine options), home care, red-flag warning signs, and when to see a doctor. Do not give short or partial answers.
+
+WHEN TO SEE A DOCTOR — NEVER give a time-based waiting period (e.g. "2 din wait karein", "24 ghante dekhein"). Instead ALWAYS give only symptom-based red-flag triggers that mean the user should see a doctor/gynaecologist immediately — e.g. heavy bleeding, severe pain, bleeding in pregnancy, high fever, etc. Never tell the user to "wait and watch" for a number of days.
+
+DOSING — give the STANDARD recognised dose range and note the minimum effective dose; do NOT restrict to a single fixed value, EXCEPT for Paracetamol — always state Paracetamol dose simply as "500mg BD" or "650mg BD" only (no range/hourly/max wording). Give weight-based or age-based dosing where relevant, and always flag pregnancy/lactation safety. Present dosing as standard reference information only, never as an instruction to this user. Examples:
+- Mefenamic acid for period pain: standard 500mg TDS with food (range/min noted).
+- Paracetamol for pain/fever: 500mg BD ya 650mg BD.
+- Vaginal fungal infection: Clotrimazole vaginal pessary/cream options.
+- Bacterial vaginosis/trichomoniasis: Metronidazole — state standard course.
+- UTI in women: list all common options (Nitrofurantoin, Norfloxacin, Fosfomycin, Cefixime etc.) with standard dose ranges.
+- Iron + folic acid for anemia in periods/pregnancy.
+
+MEDICINE OPTIONS — give the FULL relevant list, not just 2 — all commonly used options grouped by class, each as general reference info (generic, common brand, standard dose range, typical duration).
+
+NEVER PRESCRIBE — ABSOLUTE RULE: NEVER directly prescribe or tell THIS user to take any specific medicine. Present every medicine purely as general educational information about what is commonly used, and that only her own doctor/gynaecologist can decide what is right for her. After listing options for each category, write the short line described in rule B above.
+
+IMPORTANT SAFETY:
+- For pregnancy, always flag which medicines are unsafe.
+- Red-flag symptoms (heavy bleeding with clots + dizziness, severe pelvic pain, bleeding in pregnancy, post-menopausal bleeding) → say 🚨 TURANT doctor/gynaecologist se milein ya 112 call karein.
+- Never shame the user. Many women feel shy — be reassuring.
+
+ALWAYS end the ENTIRE reply with ONE final line: "⚕️ Ye sab jaankari sirf education ke liye hai. Dawai doctor/gynaecologist ki salah se hi lein. Agar khud se dawai li aur koi nuksan hua, to MedSaathiAI zimmedar nahi hoga."`;
+
+const EMERGENCY_DATA = [
+  {title:"❤️ Heart Attack",signs:["Seene mein dard","Baayein haath mein dard","Saas lene mein takleef","Paseena + nausea"],action:["🚨 TURANT 112 CALL KAREIN","Patient ko lita do","Tight kapde dhile karo","Aspirin 325mg do agar available","CPR agar hosh na ho"]},
+  {title:"🧠 Stroke",signs:["Chehra ek taraf teda","Haath/pair kamzor","Bolne mein takleef","Achanak tej sar dard"],action:["🚨 TURANT 112 CALL KAREIN","Lita do sir utha ke","Kuch khane mat do","Time note karo"]},
+  {title:"😮 Choking",signs:["Saas nahi le pa raha","Haath gale pe","Chehra laal phir neela","Koi awaaz nahi"],action:["5 baar peeth pe thapki","Heimlich maneuver karo","Bacha: ulta pakdo","112 call karo"]},
+  {title:"🔥 Burns",signs:["Jali hui skin","Tej dard ya numbness","Phaphole","Kaali leathery skin"],action:["Thande paani se 10-20 min dhoo","Ice mat lagao","Toothpaste mat lagao","Bade jale pe 112 call"]},
+  {title:"🩸 Heavy Bleeding",signs:["Ruk nahi raha khoon","Gehra wound","Chakkar kamzori","Hosh kho raha"],action:["Saaf kapde se dabaao","Haath/pair upar uthao","Pressure bandage","🚨 112 call"]},
+  {title:"⚡ Seizure",signs:["Achanak girna","Body aithna","Aankhein ulat jaana","Hosh nahi"],action:["Cheezein hata do","Sar ke neeche naram cheez","Mu mein kuch mat daalo","5 min se zyada: 112 call"]},
+  {title:"🌡️ Heat Stroke",signs:["Body temp 40C+","Paseena band","Confusion","Skin laal dry"],action:["🚨 112 call","Thandi jagah","Thanda paani body pe","Ice pack: neck armpits"]},
+  {title:"🐍 Snake Bite",signs:["Kaat liya","Sujan dard","Numbness","Nausea chakkar"],action:["🚨 TURANT hospital","Area hilaao mat","Suction mat karo","Snake type yaad rakho"]},
+];
+
+const HEALTH_TIPS = [
+  "Roz subah khali pet 1-2 glass garam paani peene se digestion better hoti hai.",
+  "Tulsi ke 4-5 patte roz khane se immunity boost hoti hai.",
+  "Haldi wala doodh raat ko peene se inflammation kam hoti hai.",
+  "Roz 30 min ki brisk walking heart, sugar aur BP control mein rakhti hai.",
+  "Nimbu paani bina sugar roz peene se Vitamin C milta hai.",
+  "Subah ki dhoop mein 15-20 min baithne se Vitamin D milti hai.",
+  "Khana khaate waqt paani peene se digestion kamzor hoti hai — 30 min baad peeyo.",
+  "Neend ke waqt phone screen se dur raho — neend ki quality behtar hogi.",
+  "Roz 7-8 ghante ki neend lena dil aur dimaag dono ke liye zaroori hai.",
+  "Khana hamesha aaram se chaba kar khao — jaldबाजी se gas aur acidity hoti hai.",
+  "Din me kam se kam 6-8 glass paani peena kidney ke liye accha hai.",
+  "Zyada namak BP badhata hai — khane me namak kam rakho.",
+  "Roz mutthi bhar dry fruits (badam, akhrot) dil ke liye faydemand hain.",
+  "Cheeni aur mithai kam karo — diabetes aur weight dono control me rahenge.",
+  "Hara saag-sabzi roz khao — iron, fibre aur vitamins milte hain.",
+  "Baith kar kaam karte ho to har 1 ghante me 2-3 min uth kar chalo.",
+  "Tambaaku aur gutkha mooh ke cancer ka sabse bada kaaran hai — chhod do.",
+  "Roz dahi ya chhaach lena pet ke achhe bacteria badhata hai.",
+  "Khaali pet chai/coffee acidity badha sakti hai — pehle kuch kha lo.",
+  "Deep breathing 5 min roz karne se stress aur BP dono kam hote hain.",
+  "Fruits ko juice ki jagah saabut khao — fibre zyada milta hai.",
+  "Haath dhona sabse aasaan tareeka hai infection se bachne ka.",
+  "Zyada tale-bhune khane se cholesterol badhta hai — kam karo.",
+  "Roz subah ya shaam halki stretching body ko flexible rakhti hai.",
+  "Saal me ek baar BP, sugar aur Hb check karwana accha hai (35+ umar me).",
+  "Mausami fal (seasonal fruits) sabse sehatmand aur sasta option hain.",
+  "Pet bhar ke nahi, thoda bhookh rehte hue khana band karo — overeating se bacho.",
+  "Roz 10-15 min dhoop aur thodi exercise depression me bhi madad karti hai.",
+  "Plastic bottle me garam paani/chai na rakho — chemicals nikal sakte hain.",
+  "Periods me dard normal hai par bahut zyada ho to gynaecologist se milo.",
+];
+
+const FEATURES = [
+  {id:"ask",icon:"🩺",title:"Ask MedSaathiAI",sub:"Symptoms → Diagnosis + Treatment",color:"#0a6640",grad:"linear-gradient(135deg,#0a5535,#12a865)",desc:"Symptoms batao — disease, medicines, home remedies sab milega",prompt:ASK_PROMPT,placeholder:"Apne symptoms batao...",suggestions:["Mujhe bukhar aur sardi hai","Pet mein dard aur loose motions","Gale mein dard","Knee aur back pain","Khasi nahi ja rahi"]},
+  {id:"gynae",icon:"🌸",title:"Women's Health",sub:"Mahilaon ki sehat se judi har baat",color:"#a8326a",grad:"linear-gradient(135deg,#8a1a52,#d44a8a)",desc:"Periods, PCOS, pregnancy, discharge — ladies ki har problem ka solution",prompt:GYNAE_PROMPT,placeholder:"Apni problem batao (periods, PCOS, pregnancy...)...",suggestions:["Periods irregular hain","White discharge ho raha hai","PCOS me kya karein","Period me bahut dard hota hai","Pregnancy me kya khayein"]},
+  {id:"medicine",icon:"💊",title:"Medicine Info",sub:"Kisi bhi medicine ki jankari",color:"#8a1a3a",grad:"linear-gradient(135deg,#7a1a2a,#cf2a5a)",desc:"Medicine ka naam daalo — uses, dose, side effects sab milega",prompt:MEDICINE_PROMPT,placeholder:"Medicine ka naam ya photo upload karo...",suggestions:["Paracetamol ke baare mein","Metformin kisliye hoti hai","Azithromycin dose","Zerodol SP kisliye hai"],showImg:true},
+  {id:"skin",icon:"🔬",title:"Skin Analyzer",sub:"Skin problems ki pehchaan",color:"#2a6a1a",grad:"linear-gradient(135deg,#1a5a0a,#4aaa2a)",desc:"Skin problem describe karo — diagnosis + treatment milega",prompt:SKIN_PROMPT,placeholder:"Skin problem describe karo...",suggestions:["Chehre pe laal daane","Haath pe kharish patches","Fungal infection","Skin pe dark spots"],showImg:true},
+  {id:"report",icon:"📊",title:"Report Reader",sub:"Report photo upload ya type karo",color:"#6a1a8a",grad:"linear-gradient(135deg,#5a1a7a,#9a2acf)",desc:"Report ki photo upload karo ya values type karo — AI explain karega",prompt:REPORT_PROMPT,placeholder:"Report values type karo...",suggestions:["Haemoglobin 9.5 normal hai?","Blood sugar fasting 145","TSH 6.2 thyroid issue?","Creatinine 1.8 kidney?","Cholesterol 240"],isReport:true},
+  {id:"weight",icon:"⚖️",title:"Weight Management",sub:"Weight loss/gain Indian plan",color:"#1a5c8a",grad:"linear-gradient(135deg,#1a4a7a,#2a8acf)",desc:"Weight loss ya gain — personalized Indian diet + exercise plan",prompt:WEIGHT_PROMPT,placeholder:"Weight loss, gain ya fitness goal batao...",suggestions:["Mujhe weight loss karna hai","Muscle banana hai","Thyroid hai weight kam nahi hota","PCOS mein weight loss"]},
+  {id:"diet",icon:"🥗",title:"Diet Planner",sub:"Personalized Indian diet plans",color:"#7a5000",grad:"linear-gradient(135deg,#6a4000,#cf8a1a)",desc:"Disease ya health ke liye customized Indian meal plan",prompt:DIET_PROMPT,placeholder:"Kisliye diet chahiye...",suggestions:["Diabetes ke liye diet","High BP mein kya khayen","Thyroid ka diet","Anemia ke liye iron foods"]},
+  {id:"emergency",icon:"🚨",title:"Emergency Guide",sub:"First aid — turant kya karein",color:"#8a1a1a",grad:"linear-gradient(135deg,#7a1515,#c0392b)",desc:"Heart attack, stroke, choking — emergency mein kya karna chahiye",isEmergency:true},
+];
+
+const LEGAL_CONTENT = {
+  privacy: {
+    title: "🔒 Privacy Policy",
+    body: [
+      {p:"MedSaathiAI aapki privacy ka samman karta hai. Jab aap is app ka istemaal karte hain, toh kuch jaankari collect ki ja sakti hai:"},
+      {li:[
+        "Aap jo lakshan (symptoms), reports, ya photos upload karte hain, wo AI dwara analyze ki jaati hain taaki aapko jawaab mil sake.",
+        "Hum aapki medical jaankari ko bechte nahi hain aur kisi third party ko marketing ke liye nahi dete.",
+        "Reports aur photos ka istemaal sirf aapko turant jawaab dene ke liye hota hai.",
+        "App behtar banane ke liye hum anonymous usage data (jaise kaun se features zyada use hote hain) dekh sakte hain.",
+      ]},
+      {p:"Aap jab chahein app ka istemaal band kar sakte hain. Kisi bhi sawaal ke liye humse contact karein: medsaathiai@gmail.com"},
+    ]
+  },
+  terms: {
+    title: "📜 Terms & Conditions",
+    body: [
+      {p:"MedSaathiAI ka istemaal karke aap in shartein se sehmat hote hain:"},
+      {li:[
+        "Ye app sirf jaankari aur shiksha (educational) ke uddeshya se hai. Ye kisi qualified doctor ki jagah nahi le sakti.",
+        "App dwara di gayi koi bhi dawai, dosage, ya salah ko bina apne doctor se confirm kiye istemaal na karein.",
+        "AI se galti ho sakti hai. Aakhri faisla hamesha ek registered medical practitioner ka hi hoga.",
+        "App ka galat istemaal (jaise dusron ko bina jaankari ke dawai dena) aapki apni zimmedari hai.",
+        "Emergency me app par bharosa na karein — turant 112 / nazdeeki hospital jaayein.",
+        "Subscription/payment ki shartein alag se di jaayengi, aur subscribe karne par aap unse sehmat honge.",
+      ]},
+      {p:"MedSaathiAI in shartein ko kabhi bhi update kar sakta hai. Sawaal ke liye: medsaathiai@gmail.com"},
+    ]
+  },
+  disclaimer: {
+    title: "⚠️ Medical Disclaimer",
+    body: [
+      {p:"MedSaathiAI ek AI-based jaankari dene wala tool hai, medical treatment dene wala doctor nahi."},
+      {li:[
+        "Is app par di gayi har jaankari, dawai ke naam, aur dosage sirf general guidance ke liye hain.",
+        "Bina doctor ki salah ke koi bhi dawai na lein. Har vyakti alag hota hai — umar, allergy, dusri bimari, pregnancy ke hisaab se dawai badal sakti hai.",
+        "App ki di gayi salah se agar koi nuksan hota hai, toh MedSaathiAI ya iske banane wale zimmedar nahi honge.",
+        "Emergency (seene me dard, saans ki dikkat, behoshi, tez bleeding) me app par samay na ganwayein — turant 112 dial karein ya nazdeeki hospital jaayein.",
+        "Ye app kisi doctor-patient rishte (relationship) ko nahi banati.",
+      ]},
+      {p:"Contact: medsaathiai@gmail.com"},
+    ]
+  },
+};
+
+function LegalModal({type, onClose}) {
+  if (!type) return null;
+  const data = LEGAL_CONTENT[type];
+  const e = React.createElement;
+  return e('div', {onClick:onClose, style:{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:1000,display:"flex",alignItems:"flex-end",justifyContent:"center"}},
+    e('div', {onClick:ev=>ev.stopPropagation(), style:{background:"#fff",width:"100%",maxWidth:600,maxHeight:"85vh",borderRadius:"20px 20px 0 0",display:"flex",flexDirection:"column",animation:"fadeIn 0.25s ease"}},
+      e('div', {style:{background:"linear-gradient(135deg,#0a5535,#12a865)",padding:"16px 20px",borderRadius:"20px 20px 0 0",display:"flex",alignItems:"center",justifyContent:"space-between"}},
+        e('div', {style:{color:"white",fontWeight:700,fontSize:16}}, data.title),
+        e('button', {onClick:onClose, style:{background:"rgba(255,255,255,0.18)",border:"none",borderRadius:8,color:"white",width:32,height:32,cursor:"pointer",fontSize:16}}, "✕")
+      ),
+      e('div', {style:{overflowY:"auto",padding:"20px 22px 30px"}},
+        data.body.map((sec, i) => e('div', {key:i, style:{marginBottom:14}},
+          sec.p && e('p', {style:{fontSize:14,color:"#2d3748",lineHeight:1.8}}, sec.p),
+          sec.li && e('div', {style:{display:"flex",flexDirection:"column",gap:9}},
+            sec.li.map((item, j) => e('div', {key:j, style:{display:"flex",gap:9,fontSize:14,color:"#2d3748",lineHeight:1.7}},
+              e('span', {style:{color:"#0a6640",flexShrink:0,fontWeight:700}}, "•"),
+              e('span', null, item)
+            ))
+          )
+        )),
+        e('p', {style:{textAlign:"center",color:"#9ab8ac",fontSize:11,marginTop:16,fontStyle:"italic"}}, "Last updated: 2025 • MedSaathiAI")
+      )
+    )
+  );
+}
+
+function Footer({onOpen}) {
+  const e = React.createElement;
+  return e('div', {style:{borderTop:"1px solid #d4eddf",background:"rgba(255,255,255,0.6)",padding:"18px 16px 24px",textAlign:"center"}},
+    e('div', {style:{display:"flex",flexWrap:"wrap",gap:"10px 20px",justifyContent:"center",marginBottom:10}},
+      e('button', {onClick:()=>onOpen("privacy"), style:{background:"none",border:"none",color:"#0a6640",fontSize:13,cursor:"pointer",textDecoration:"underline",fontWeight:600}}, "Privacy Policy"),
+      e('button', {onClick:()=>onOpen("terms"), style:{background:"none",border:"none",color:"#0a6640",fontSize:13,cursor:"pointer",textDecoration:"underline",fontWeight:600}}, "Terms & Conditions"),
+      e('button', {onClick:()=>onOpen("disclaimer"), style:{background:"none",border:"none",color:"#0a6640",fontSize:13,cursor:"pointer",textDecoration:"underline",fontWeight:600}}, "Medical Disclaimer")
+    ),
+    e('p', {style:{color:"#9ab8ac",fontSize:11,lineHeight:1.6}}, "© 2025 MedSaathiAI • Aapka Swasthya Saathi"),
+    e('p', {style:{color:"#9ab8ac",fontSize:11,marginTop:3}}, "📧 medsaathiai@gmail.com")
+  );
+}
+
+function ConsentScreen({onAccept}) {
+  const [checked, setChecked] = React.useState(false);
+  const e = React.createElement;
+  return e('div', {style:{position:"fixed",inset:0,zIndex:2000,background:"linear-gradient(160deg,#0a5535,#0a3322)",display:"flex",alignItems:"center",justifyContent:"center",padding:18,overflowY:"auto"}},
+    e('div', {style:{background:"#fff",maxWidth:480,width:"100%",borderRadius:22,padding:"28px 24px",boxShadow:"0 20px 60px rgba(0,0,0,0.4)",animation:"fadeIn 0.3s ease"}},
+      e('div', {style:{textAlign:"center",marginBottom:18}},
+        e('div', {style:{fontSize:46,marginBottom:8}}, "🏥"),
+        e('div', {style:{fontSize:21,fontWeight:700,color:"#0a5535"}}, "MedSaathiAI"),
+        e('div', {style:{fontSize:12,color:"#7a9e8a",fontStyle:"italic",marginTop:2}}, "Aapka Swasthya Saathi")
+      ),
+      e('div', {style:{background:"linear-gradient(135deg,#fff8e1,#fff3cd)",border:"1px solid #f0a500",borderLeft:"4px solid #e67e00",borderRadius:12,padding:"16px 18px",marginBottom:18}},
+        e('div', {style:{fontSize:14,fontWeight:700,color:"#7a4500",marginBottom:10}}, "⚠️ Istemaal se pehle padhein"),
+        e('div', {style:{fontSize:14,color:"#2d3748",lineHeight:1.9}},
+          "Main samajhta hoon ki ye ek ", e('strong', null, "AI tool"), " hai jo ke sirf education ke liye hai, koi doctor nahi. Koi bhi dawai main ", e('strong', null, "doctor ki salah se hi"), " lunga. Agar bina doctor ki salah ke dawai li aur koi nuksan hua, to iske liye ", e('strong', null, "MedSaathiAI aur uske banane wale zimmedar nahi honge."),
+        )
+      ),
+      e('div', {style:{fontSize:12,color:"#7a9e8a",lineHeight:1.7,marginBottom:16,textAlign:"center"}},
+        "🚨 Emergency me app par bharosa na karein — turant ", e('strong', {style:{color:"#c0392b"}}, "112"), " call karein ya nazdeeki hospital jaayein."
+      ),
+      e('label', {style:{display:"flex",alignItems:"flex-start",gap:10,cursor:"pointer",marginBottom:18,padding:"12px 14px",background:checked?"#e8f5ee":"#f5faf7",border:`2px solid ${checked?"#0a6640":"#c8e6d4"}`,borderRadius:12}},
+        e('input', {type:"checkbox", checked:checked, onChange:ev=>setChecked(ev.target.checked), style:{width:20,height:20,marginTop:1,flexShrink:0,accentColor:"#0a6640",cursor:"pointer"}}),
+        e('span', {style:{fontSize:13,color:"#2d3748",lineHeight:1.6,fontWeight:600}}, "Main upar likhi baatein samajhta hoon aur sehmat hoon.")
+      ),
+      e('button', {onClick:()=>checked&&onAccept(), disabled:!checked,
+        style:{width:"100%",background:checked?"linear-gradient(135deg,#12a865,#0a5535)":"#c8e6d4",color:"white",border:"none",borderRadius:12,padding:"15px",fontSize:15,fontWeight:700,cursor:checked?"pointer":"not-allowed"}},
+        checked ? "✅ I Agree — App Shuru Karein" : "Pehle box tick karein"
+      ),
+      e('p', {style:{textAlign:"center",color:"#9ab8ac",fontSize:11,marginTop:12}}, "© 2025 MedSaathiAI • medsaathiai@gmail.com")
+    )
+  );
+}
+
+function formatMsg(text, accent) {
+  return text.split("\n").map((line, i) => {
+    if (!line.trim()) return React.createElement('div', {key:i, style:{height:6}});
+    if (line.startsWith("⚠️ Ye jankari") || line.startsWith("💡 Ye") || line.startsWith("⚠️ DISCLAIMER")) return React.createElement('div', {key:i, style:{background:"linear-gradient(135deg,#fff8e1,#fff3cd)",border:"1px solid #f0a500",borderLeft:"4px solid #e67e00",borderRadius:8,padding:"10px 14px",marginTop:12,fontSize:13,color:"#7a4500",fontWeight:500,lineHeight:1.6}}, line);
+    if (line.startsWith("⚕️")) return React.createElement('div', {key:i, style:{background:"linear-gradient(135deg,#e8f2ff,#dceaff)",border:"1px solid #7aa8e8",borderLeft:"4px solid #2a5fc8",borderRadius:8,padding:"9px 13px",marginTop:10,fontSize:13,color:"#1a3a70",fontWeight:500,lineHeight:1.6}}, line);
+    if (line.includes("🚨 TURANT") || (line.startsWith("🚨") && line.length > 4)) return React.createElement('div', {key:i, style:{background:"#fff0f0",border:"1px solid #fc8181",borderLeft:"4px solid #c53030",borderRadius:8,padding:"10px 14px",marginTop:8,fontSize:13,color:"#742a2a",fontWeight:700,lineHeight:1.6}}, line);
+    if (line.includes("Doctor ki salah se in mein se ek le sakte hain")) return React.createElement('div', {key:i, style:{background:"#e8f5ee",border:"1px solid #a8d5bf",borderLeft:"3px solid #0a6640",borderRadius:8,padding:"8px 12px",marginTop:4,fontSize:12,color:"#0a4428",fontStyle:"italic"}}, line);
+    if (/^\*\*[^*]+\*\*$/.test(line.trim())) return React.createElement('div', {key:i, style:{fontWeight:700,color:accent,marginTop:14,fontSize:14,borderBottom:`1px solid ${accent}33`,paddingBottom:4}}, line.replace(/\*\*/g,""));
+    if (/\*\*/.test(line)) {
+      const parts = line.split(/\*\*(.+?)\*\*/g);
+      return React.createElement('div', {key:i, style:{marginTop:4,lineHeight:1.7,fontSize:14,color:"#2d3748"}}, parts.map((p,j) => j%2===1 ? React.createElement('strong', {key:j, style:{color:accent}}, p) : p));
+    }
+    if (/^(1st|2nd|3rd|4th) Choice:/.test(line.trim())) return React.createElement('div', {key:i, style:{display:"flex",gap:8,marginTop:5,fontSize:14,color:"#2d3748",paddingLeft:8}}, React.createElement('span', {style:{color:accent,fontWeight:700,flexShrink:0,minWidth:80}}, line.split(":")[0]+":"), React.createElement('span', {style:{lineHeight:1.6}}, line.split(":").slice(1).join(":").trim()));
+    if (/^[-•]/.test(line.trim())) return React.createElement('div', {key:i, style:{display:"flex",gap:8,marginTop:4,fontSize:14,color:"#2d3748",lineHeight:1.6}}, React.createElement('span', {style:{color:accent,flexShrink:0}}, "•"), React.createElement('span', null, line.trim().slice(1).trim()));
+    if (/^\d+\./.test(line.trim())) return React.createElement('div', {key:i, style:{marginTop:4,fontSize:14,color:"#2d3748",lineHeight:1.6,paddingLeft:4}}, line);
+    return React.createElement('div', {key:i, style:{fontSize:14,color:"#2d3748",lineHeight:1.7,marginTop:3}}, line);
+  });
+}
+
+function ChatPane({feature, profileCtx=""}) {
+  const [msgs, setMsgs] = React.useState([{role:"assistant",content:`Hello! ${feature.icon}\n\nKya poochna chahte ho? Main yahan hoon! 😊`}]);
+  const [input, setInput] = React.useState("");
+  const [loading, setLoading] = React.useState(false);
+  const [imgPreview, setImgPreview] = React.useState(null);
+  const [imgBase64, setImgBase64] = React.useState(null);
+  const [fileMime, setFileMime] = React.useState(null);
+  const [fileName, setFileName] = React.useState(null);
+  const bottomRef = React.useRef(null);
+  const fileRef = React.useRef(null);
+  const cameraRef = React.useRef(null);
+  const docRef = React.useRef(null);
+  const [showPhotoMenu, setShowPhotoMenu] = React.useState(false);
+  const isFirst = React.useRef(true);
+  const [listening, setListening] = React.useState(false);
+  const [voiceSupported, setVoiceSupported] = React.useState(false);
+  const recogRef = React.useRef(null);
+
+  React.useEffect(() => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SR) {
+      setVoiceSupported(true);
+      const r = new SR();
+      r.lang = "hi-IN";
+      r.continuous = false;
+      r.interimResults = false;
+      r.onresult = (ev) => {
+        const transcript = ev.results[0][0].transcript;
+        setInput(prev => (prev ? prev + " " : "") + transcript);
+      };
+      r.onend = () => setListening(false);
+      r.onerror = () => setListening(false);
+      recogRef.current = r;
+    }
+  }, []);
+
+  const toggleVoice = () => {
+    const r = recogRef.current;
+    if (!r) return;
+    if (listening) { try { r.stop(); } catch(e){} setListening(false); }
+    else { try { r.start(); setListening(true); } catch(e){ setListening(false); } }
+  };
+
+  React.useEffect(() => { bottomRef.current && bottomRef.current.scrollIntoView({behavior:"smooth"}); }, [msgs, loading]);
+
+  const handleImg = (file) => {
+    if (!file) return;
+    const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name || "");
+    setFileMime(isPdf ? "application/pdf" : (file.type || "image/jpeg"));
+    setFileName(file.name || "");
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setImgBase64(e.target.result.split(",")[1]);
+      setImgPreview(isPdf ? "PDF:" + (file.name || "document.pdf") : e.target.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const send = async (txt) => {
+    const text = txt || input.trim();
+    if ((!text && !imgBase64) || loading) return;
+    setInput(""); setLoading(true);
+    const userDisplay = text || (fileMime === "application/pdf" ? "📄 PDF bheja hai" : "📸 Photo bheji hai");
+    const newMsgs = [...msgs, {role:"user", content:userDisplay, imgPreview}];
+    setMsgs(newMsgs);
+    setImgPreview(null);
+
+    let userContent = [];
+    if (imgBase64) {
+      if (fileMime === "application/pdf") {
+        userContent.push({type:"document", source:{type:"base64", media_type:"application/pdf", data:imgBase64}});
+      } else {
+        userContent.push({type:"image", source:{type:"base64", media_type:(fileMime || "image/jpeg"), data:imgBase64}});
+      }
+    }
+    const textToSend = (profileCtx && isFirst.current) ? profileCtx + "\n\nUser query: " + (text || "Is file ko dekh ke batao.") : (text || "Is file/report ko medical perspective se simple bhasha me explain karo.");
+    userContent.push({type:"text", text: textToSend});
+    if (isFirst.current) isFirst.current = false;
+    setImgBase64(null); setFileMime(null); setFileName(null);
+
+    try {
+      const histMsgs = msgs.filter(m => !m.imgPreview).map(m => ({role:m.role, content:m.content}));
+      const res = await fetch("/api/chat", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({model:"claude-opus-4-8", max_tokens:4096, system:feature.prompt, messages:[...histMsgs, {role:"user", content:userContent}]})
+      });
+      const data = await res.json();
+      const reply = data.content?.map(item => item.text || "").join("\n") || "No response";
+      setMsgs(prev => [...prev, {role:"assistant", content:reply}]);
+    } catch(e) {
+      setMsgs(prev => [...prev, {role:"assistant", content:"⚠️ Network error. Please try again."}]);
+    } finally { setLoading(false); }
+  };
+
+  const accent = feature.color;
+  return React.createElement('div', {style:{display:"flex",flexDirection:"column",flex:1,minHeight:0}},
+    React.createElement('div', {style:{flex:1,overflowY:"auto",padding:16,display:"flex",flexDirection:"column",gap:14}},
+      msgs.length === 1 && feature.suggestions && React.createElement('div', {style:{padding:"20px 0"}},
+        React.createElement('p', {style:{textAlign:"center",fontSize:13,color:"#6b9e87",marginBottom:12}}, "💡 Kuch pooch sakte ho:"),
+        React.createElement('div', {style:{display:"flex",flexWrap:"wrap",gap:8,justifyContent:"center"}},
+          feature.suggestions.map((s,i) => React.createElement('button', {key:i, onClick:()=>send(s), style:{background:"white",border:"1.5px solid #c8e6d4",borderRadius:20,padding:"7px 14px",fontSize:12,color:accent,cursor:"pointer"}}, s))
+        )
+      ),
+      msgs.map((msg, i) => React.createElement('div', {key:i, style:{display:"flex",flexDirection:msg.role==="user"?"row-reverse":"row",gap:10,alignItems:"flex-start"}},
+        React.createElement('div', {style:{width:34,height:34,borderRadius:"50%",flexShrink:0,background:msg.role==="user"?`linear-gradient(135deg,${accent},#0a3322)`:"linear-gradient(135deg,#f0f0f0,#fff)",border:msg.role==="assistant"?"2px solid #c8e6d4":"none",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}, msg.role==="user"?"👤":"🤖"),
+        React.createElement('div', {style:{maxWidth:"80%",background:msg.role==="user"?`linear-gradient(135deg,#0a5535,${accent})`:"white",color:msg.role==="user"?"white":"#2d3748",borderRadius:msg.role==="user"?"18px 4px 18px 18px":"4px 18px 18px 18px",padding:"12px 16px",boxShadow:"0 2px 14px rgba(0,0,0,0.08)",fontSize:14,lineHeight:1.6,border:msg.role==="assistant"?"1px solid #d4eddf":"none"}},
+          msg.imgPreview && (msg.imgPreview.indexOf("PDF:")===0
+            ? React.createElement('div', {style:{display:"flex",alignItems:"center",gap:8,background:"rgba(255,255,255,0.18)",borderRadius:8,padding:"8px 12px",marginBottom:8,fontSize:13}}, "📄 " + msg.imgPreview.slice(4))
+            : React.createElement('img', {src:msg.imgPreview, style:{width:"100%",maxWidth:180,borderRadius:8,marginBottom:8,display:"block"}})),
+          msg.role==="assistant" ? formatMsg(msg.content, accent) : msg.content
+        )
+      )),
+      loading && React.createElement('div', {style:{display:"flex",gap:10,alignItems:"flex-start"}},
+        React.createElement('div', {style:{width:34,height:34,borderRadius:"50%",background:"linear-gradient(135deg,#f0f0f0,#fff)",border:"2px solid #c8e6d4",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}, "🤖"),
+        React.createElement('div', {style:{background:"white",borderRadius:"4px 18px 18px 18px",padding:"14px 18px",border:"1px solid #d4eddf",display:"flex",gap:6,alignItems:"center"}},
+          [0,1,2].map(j => React.createElement('div', {key:j, style:{width:8,height:8,borderRadius:"50%",background:accent,animation:`bounce 1.2s ease-in-out ${j*0.2}s infinite`}}))
+        )
+      ),
+      React.createElement('div', {ref:bottomRef})
+    ),
+    imgPreview && React.createElement('div', {style:{padding:"8px 16px",background:"#f0f8ff",borderTop:"1px solid #c8e6d4",display:"flex",alignItems:"center",gap:10}},
+      imgPreview.indexOf("PDF:")===0
+        ? React.createElement('div', {style:{width:48,height:48,borderRadius:8,background:"#e6f0fa",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}, "📄")
+        : React.createElement('img', {src:imgPreview, style:{width:48,height:48,objectFit:"cover",borderRadius:8}}),
+      React.createElement('span', {style:{fontSize:13,color:accent,flex:1,fontWeight:600}}, imgPreview.indexOf("PDF:")===0 ? ("📄 " + imgPreview.slice(4) + " ready — Send karo") : "📸 Photo ready — Send karo"),
+      React.createElement('button', {onClick:()=>{setImgPreview(null);setImgBase64(null);setFileMime(null);setFileName(null);}, style:{background:"#e53e3e",border:"none",borderRadius:6,color:"white",padding:"4px 8px",cursor:"pointer",fontSize:12}}, "✕")
+    ),
+    React.createElement('div', {style:{borderTop:"1px solid #c8e6d4",padding:"12px 16px",background:"rgba(240,250,245,0.97)"}},
+      (feature.showImg || feature.isReport) && React.createElement('div', {style:{marginBottom:8,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",position:"relative"}},
+        React.createElement('button', {onClick:()=>setShowPhotoMenu(v=>!v), style:{background:`linear-gradient(135deg,${accent},#0a3322)`,border:"none",borderRadius:10,color:"white",padding:"7px 14px",fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",gap:6,fontWeight:600}}, "📸 Photo Upload karo"),
+        showPhotoMenu && React.createElement('div', {onClick:()=>setShowPhotoMenu(false), style:{position:"fixed",inset:0,zIndex:18}}),
+        showPhotoMenu && React.createElement('div', {style:{position:"absolute",top:38,left:0,zIndex:20,background:"white",borderRadius:12,boxShadow:"0 6px 24px rgba(0,0,0,0.18)",border:"1px solid #e2e8f0",overflow:"hidden",minWidth:170}},
+          React.createElement('button', {onClick:()=>{setShowPhotoMenu(false);cameraRef.current&&cameraRef.current.click();}, style:{width:"100%",background:"none",border:"none",borderBottom:"1px solid #eef2f0",padding:"12px 16px",fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",gap:10,color:"#2d3748",textAlign:"left"}}, "📷 Camera"),
+          React.createElement('button', {onClick:()=>{setShowPhotoMenu(false);fileRef.current&&fileRef.current.click();}, style:{width:"100%",background:"none",border:"none",borderBottom:"1px solid #eef2f0",padding:"12px 16px",fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",gap:10,color:"#2d3748",textAlign:"left"}}, "🖼️ Gallery / Photos"),
+          React.createElement('button', {onClick:()=>{setShowPhotoMenu(false);docRef.current&&docRef.current.click();}, style:{width:"100%",background:"none",border:"none",padding:"12px 16px",fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",gap:10,color:"#2d3748",textAlign:"left"}}, "📄 File / Document")
+        ),
+        React.createElement('input', {ref:cameraRef, type:"file", accept:"image/*", capture:"environment", style:{display:"none"}, onChange:e=>handleImg(e.target.files[0])}),
+        React.createElement('input', {ref:fileRef, type:"file", accept:"image/*", style:{display:"none"}, onChange:e=>handleImg(e.target.files[0])}),
+        React.createElement('input', {ref:docRef, type:"file", accept:"image/*,application/pdf", style:{display:"none"}, onChange:e=>handleImg(e.target.files[0])}),
+        React.createElement('span', {style:{fontSize:11,color:"#7a9e8a",width:"100%"}}, feature.isReport ? "Report/USG photo upload karo" : "Medicine strip, wound, rash — koi bhi")
+      ),
+      React.createElement('div', {style:{display:"flex",gap:10,alignItems:"flex-end"}},
+        React.createElement('textarea', {value:input, onChange:e=>setInput(e.target.value),
+          onKeyDown:e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();}},
+          onInput:e=>{e.target.style.height="auto";e.target.style.height=Math.min(e.target.scrollHeight,120)+"px";},
+          placeholder:feature.placeholder, rows:1,
+          style:{flex:1,border:"2px solid #c8e6d4",borderRadius:14,padding:"11px 14px",fontSize:14,resize:"none",background:"white",color:"#2d3748",outline:"none",minHeight:44,maxHeight:120,lineHeight:1.5,boxSizing:"border-box"},
+          onFocus:e=>e.target.style.borderColor=accent, onBlur:e=>e.target.style.borderColor="#c8e6d4"
+        }),
+        voiceSupported && React.createElement('button', {onClick:toggleVoice, title:"Bol kar likho",
+          style:{width:44,height:44,background:listening?"linear-gradient(135deg,#e53e3e,#c0392b)":"white",border:`2px solid ${listening?"#c0392b":"#c8e6d4"}`,borderRadius:12,color:listening?"white":accent,fontSize:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,animation:listening?"pulse 1.2s infinite":"none"}
+        }, "🎤"),
+        React.createElement('button', {onClick:()=>send(), disabled:loading||(!input.trim()&&!imgBase64),
+          style:{width:44,height:44,background:loading||(!input.trim()&&!imgBase64)?"#c8e6d4":`linear-gradient(135deg,${accent},#0a3322)`,border:"none",borderRadius:12,color:"white",fontSize:20,cursor:loading||(!input.trim()&&!imgBase64)?"not-allowed":"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}
+        }, loading?"⏳":"➤")
+      ),
+      listening && React.createElement('p', {style:{textAlign:"center",color:"#c0392b",fontSize:12,marginTop:6,fontWeight:600}}, "🎤 Sun raha hoon... ab boliye"),
+      React.createElement('p', {style:{textAlign:"center",color:"#9ab8ac",fontSize:11,marginTop:7,fontStyle:"italic"}}, "⚕️ Emergency: 112 | Ye app doctor ki jagah nahi le sakta")
+    )
+  );
+}
+
+function LoginScreen() {
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [mode, setMode] = React.useState("login"); // "login" or "signup"
+  const [email, setEmail] = React.useState("");
+  const [password, setPassword] = React.useState("");
+
+  const signInWithGoogle = async () => {
+    setError(""); setLoading(true);
+    try {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      await fbAuth.signInWithPopup(provider);
+    } catch (err) {
+      setError(`Google sign-in error: ${err.code || ""} ${err.message || err}`);
+    } finally { setLoading(false); }
+  };
+
+  const submitEmailForm = async (ev) => {
+    ev.preventDefault();
+    setError("");
+    if (!email || !password) { setError("Email aur password dono daalein"); return; }
+    setLoading(true);
+    try {
+      if (mode === "login") {
+        await fbAuth.signInWithEmailAndPassword(email, password);
+      } else {
+        await fbAuth.createUserWithEmailAndPassword(email, password);
+      }
+    } catch (err) {
+      setError(`${err.code || ""} ${err.message || err}`);
+    } finally { setLoading(false); }
+  };
+
+  const e = React.createElement;
+  return e('div', {style:{minHeight:"100vh",background:"linear-gradient(160deg,#f0faf5,#e8f5ee)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}},
+    e('div', {style:{background:"white",borderRadius:20,padding:"32px 26px",maxWidth:380,width:"100%",boxShadow:"0 8px 32px rgba(10,85,53,0.15)",textAlign:"center"}},
+      e('div', {style:{fontSize:44,marginBottom:8}}, "🏥"),
+      e('h1', {style:{color:"#0a5535",fontSize:20,fontWeight:700,marginBottom:4}}, "MedSaathiAI"),
+      e('p', {style:{color:"#7a9e8a",fontSize:12,marginBottom:24}}, "Login karke aage badhein"),
+
+      error && e('div', {style:{background:"#ffe8e8",color:"#c0392b",fontSize:12,padding:"8px 12px",borderRadius:8,marginBottom:14,textAlign:"left"}}, "⚠️ ", error),
+
+      e('form', {onSubmit:submitEmailForm, style:{textAlign:"left",marginBottom:14}},
+        e('input', {type:"email", placeholder:"Email", value:email, onChange:ev=>setEmail(ev.target.value), disabled:loading,
+          style:{width:"100%",boxSizing:"border-box",padding:"11px 12px",fontSize:14,borderRadius:10,border:"1px solid #cfe3d8",marginBottom:10,outline:"none"}}),
+        e('input', {type:"password", placeholder:"Password", value:password, onChange:ev=>setPassword(ev.target.value), disabled:loading,
+          style:{width:"100%",boxSizing:"border-box",padding:"11px 12px",fontSize:14,borderRadius:10,border:"1px solid #cfe3d8",marginBottom:10,outline:"none"}}),
+        e('button', {type:"submit", disabled:loading, style:{width:"100%",background:"linear-gradient(135deg,#12a865,#0a5535)",color:"white",border:"none",borderRadius:12,padding:"13px",fontSize:14,fontWeight:700,cursor:loading?"not-allowed":"pointer"}},
+          loading ? "⏳ Ek pal..." : (mode === "login" ? "Email se Login karein" : "Naya account banayein")
+        )
+      ),
+
+      e('p', {style:{fontSize:12,color:"#0a5535",marginBottom:16,cursor:"pointer",fontWeight:600}, onClick:()=>{ setError(""); setMode(mode === "login" ? "signup" : "login"); }},
+        mode === "login" ? "Naya user hain? Account banayein" : "Pehle se account hai? Login karein"
+      ),
+
+      e('div', {style:{display:"flex",alignItems:"center",gap:10,margin:"6px 0 16px"}},
+        e('div', {style:{flex:1,height:1,background:"#e0ece5"}}),
+        e('span', {style:{fontSize:11,color:"#9ab8ac"}}, "ya"),
+        e('div', {style:{flex:1,height:1,background:"#e0ece5"}})
+      ),
+
+      e('button', {onClick:signInWithGoogle, disabled:loading, style:{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:10,background:"white",color:"#0a5535",border:"1.5px solid #12a865",borderRadius:12,padding:"13px",fontSize:14,fontWeight:700,cursor:loading?"not-allowed":"pointer"}},
+        loading ? "⏳ Sign in ho raha hai..." : "🔵 Google se Sign in"
+      ),
+
+      e('p', {style:{marginTop:20,fontSize:10,color:"#9ab8ac",lineHeight:1.5}}, "Login karke aap humari Terms & Privacy Policy se sehmat hote hain")
+    )
+  );
+}
+
+function App() {
+  const [consented, setConsented] = React.useState(() => {
+    try { return localStorage.getItem("medsaathi_consent") === "yes"; } catch(e) { return false; }
+  });
+  const [legalOpen, setLegalOpen] = React.useState(null);
+  const [screen, setScreen] = React.useState("home");
+  const [activeF, setActiveF] = React.useState(null);
+  const [profile, setProfile] = React.useState({age:"",gender:"Male",weight:"",history:"",currentMeds:"",allergies:"",pregnant:"No"});
+  const [profileSaved, setProfileSaved] = React.useState(false);
+  const [errors, setErrors] = React.useState({});
+  const [openEmerg, setOpenEmerg] = React.useState(null);
+  const [tipIdx] = React.useState(() => Math.floor(Math.random()*HEALTH_TIPS.length));
+  const [fbUser, setFbUser] = React.useState(null);
+  const [authChecked, setAuthChecked] = React.useState(false);
+  const [trialInfo, setTrialInfo] = React.useState(null);
+  const [showTrialPopup, setShowTrialPopup] = React.useState(false);
+
+  React.useEffect(() => {
+    const unsub = fbAuth.onAuthStateChanged(u => { setFbUser(u); setAuthChecked(true); });
+    return unsub;
+  }, []);
+
+  React.useEffect(() => {
+    if (!fbUser) { setTrialInfo(null); return; }
+    const userRef = fbDb.ref('users/' + fbUser.uid);
+    userRef.get().then(snap => {
+      const data = snap.val();
+      if (!data) {
+        const trialStart = Date.now();
+        userRef.set({ trialStart, subscribed: false }).then(() => {
+          setTrialInfo({ trialStart, subscribed: false });
+          setShowTrialPopup(true);
+        });
+      } else {
+        setTrialInfo({ trialStart: data.trialStart, subscribed: !!data.subscribed, unlimited: !!data.unlimited });
+      }
+    }).catch(err => {
+      console.error("Trial check failed:", err);
+      setTrialInfo({ trialStart: Date.now(), subscribed: false, error: true });
+    });
+  }, [fbUser]);
+
+  const trialStatus = React.useMemo(() => {
+    if (!trialInfo) return null;
+    if (trialInfo.unlimited) return { active: true, subscribed: true, unlimited: true, daysLeft: 0 };
+    if (trialInfo.subscribed) return { active: true, subscribed: true, daysLeft: 0 };
+    const daysPassed = (Date.now() - trialInfo.trialStart) / (1000*60*60*24);
+    const daysLeft = Math.max(0, Math.ceil(TRIAL_DAYS - daysPassed));
+    return { active: daysPassed < TRIAL_DAYS, subscribed: false, daysLeft };
+  }, [trialInfo]);
+
+  const logout = () => { fbAuth.signOut(); };
+
+  const [paying, setPaying] = React.useState(false);
+
+  const handleSubscribe = async () => {
+    if (paying) return;
+    setPaying(true);
+    try {
+      const orderRes = await fetch('/api/create-order', { method: 'POST' });
+      const orderData = await orderRes.json();
+      if (!orderRes.ok || !orderData.orderId) {
+        alert("Payment shuru nahi ho paya. Dobara try karein.");
+        setPaying(false);
+        return;
+      }
+
+      const options = {
+        key: orderData.keyId,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        name: "MedSaathiAI",
+        description: "3 Mahine Subscription",
+        order_id: orderData.orderId,
+        prefill: { email: fbUser && fbUser.email ? fbUser.email : "" },
+        theme: { color: "#0a5535" },
+        handler: async function (response) {
+          try {
+            const verifyRes = await fetch('/api/verify-payment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              }),
+            });
+            const verifyData = await verifyRes.json();
+            if (verifyData.success && fbUser) {
+              await fbDb.ref('users/' + fbUser.uid).update({ subscribed: true });
+              setTrialInfo(prev => prev ? { ...prev, subscribed: true } : prev);
+              alert("Payment safal raha! Ab aap MedSaathiAI use kar sakte hain.");
+            } else {
+              alert("Payment verify nahi ho paya. Agar paise kate hain to support se contact karein.");
+            }
+          } catch (err) {
+            console.error(err);
+            alert("Payment verify karte waqt error aayi.");
+          }
+          setPaying(false);
+        },
+        modal: {
+          ondismiss: function () { setPaying(false); }
+        }
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.open();
+    } catch (err) {
+      console.error(err);
+      alert("Payment shuru nahi ho paya. Dobara try karein.");
+      setPaying(false);
+    }
+  };
+
+  const profileCtx = profileSaved ? `PATIENT PROFILE:\n- Age: ${profile.age} years\n- Gender: ${profile.gender}\n- Weight: ${profile.weight||"Not provided"} kg\n- Medical History: ${profile.history||"None"}\n- Current Medications: ${profile.currentMeds||"None"}\n- Allergy History: ${profile.allergies||"None"}\n- Pregnancy Status: ${profile.pregnant}\n\nPersonalise all advice. Check drug interactions and allergies.` : "";
+
+  const openFeature = (f) => {
+    if (f.isEmergency) { setActiveF(f); setScreen("feature"); return; }
+    if (!profileSaved && f.id === "ask") { setActiveF(f); setScreen("profile"); return; }
+    setActiveF(f); setScreen("feature");
+  };
+
+  const validate = () => { const e={}; if(!profile.age||isNaN(profile.age)||+profile.age<1) e.age="Valid age daalo"; setErrors(e); return Object.keys(e).length===0; };
+  const saveProfile = () => { if(!validate()) return; setProfileSaved(true); setScreen("feature"); };
+
+  const e = React.createElement;
+
+  const acceptConsent = () => {
+    try { localStorage.setItem("medsaathi_consent", "yes"); } catch(err) {}
+    setConsented(true);
+  };
+
+  if (!consented) return e(ConsentScreen, {onAccept:acceptConsent});
+
+  if (!authChecked) return e('div', {style:{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(160deg,#f0faf5,#e8f5ee)"}},
+    e('div', {style:{fontSize:40}}, "🏥")
+  );
+
+  if (!fbUser) return e(LoginScreen);
+
+  if (!trialStatus) return e('div', {style:{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(160deg,#f0faf5,#e8f5ee)"}},
+    e('div', {style:{fontSize:40}}, "🏥")
+  );
+
+  if (!trialStatus.active) return e('div', {style:{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(160deg,#f0faf5,#e8f5ee)",padding:20}},
+    e('div', {style:{background:"white",borderRadius:16,padding:"32px 24px",maxWidth:380,width:"100%",textAlign:"center",boxShadow:"0 8px 32px rgba(0,0,0,0.12)"}},
+      e('div', {style:{fontSize:44,marginBottom:12}}, "⏳"),
+      e('h2', {style:{color:"#0a5535",fontSize:20,fontWeight:700,marginBottom:10}}, "Free Trial Khatam Ho Gaya"),
+      e('p', {style:{color:"#4a7c6a",fontSize:14,marginBottom:22,lineHeight:1.5}}, "Aapka 1 mahine ka free trial khatam ho chuka hai. MedSaathiAI use karte rehne ke liye subscribe karein — sirf ₹149/3 mahine."),
+      e('button', {onClick:handleSubscribe, disabled:paying, style:{background:"linear-gradient(135deg,#12a865,#0a5535)",color:"white",border:"none",borderRadius:12,padding:"14px",fontSize:15,fontWeight:700,cursor:paying?"not-allowed":"pointer",width:"100%",marginBottom:10,opacity:paying?0.7:1}}, paying ? "Processing..." : "Subscribe Karein — ₹149/3 mahine"),
+      e('button', {onClick:logout, style:{background:"none",border:"none",color:"#9ab8ac",fontSize:13,cursor:"pointer",textDecoration:"underline"}}, "Logout")
+    )
+  );
+
+  if (screen === "home") return e('div', {style:{minHeight:"100vh",background:"linear-gradient(160deg,#f0faf5,#e8f5ee)"}},
+    e(LegalModal, {type:legalOpen, onClose:()=>setLegalOpen(null)}),
+    showTrialPopup && e('div', {style:{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:20}},
+      e('div', {style:{background:"white",borderRadius:16,padding:"32px 24px",maxWidth:380,width:"100%",textAlign:"center",boxShadow:"0 8px 32px rgba(0,0,0,0.2)"}},
+        e('div', {style:{fontSize:44,marginBottom:12}}, "🎉"),
+        e('h2', {style:{color:"#0a5535",fontSize:20,fontWeight:700,marginBottom:10}}, "30 Din Ka Free Trial Shuru!"),
+        e('p', {style:{color:"#4a7c6a",fontSize:14,marginBottom:22,lineHeight:1.5}}, "Aapka MedSaathiAI ka 30 din ka free trial abhi shuru ho gaya hai. Trial khatam hone ke baad continue karne ke liye subscription lena hoga — sirf ₹149/3 mahine."),
+        e('button', {onClick:()=>setShowTrialPopup(false), style:{background:"linear-gradient(135deg,#12a865,#0a5535)",color:"white",border:"none",borderRadius:12,padding:"14px",fontSize:15,fontWeight:700,cursor:"pointer",width:"100%"}}, "Theek Hai, Shuru Karein")
+      )
+    ),
+    e('div', {style:{background:"linear-gradient(135deg,#0a5535,#12a865)",boxShadow:"0 4px 24px rgba(10,85,53,0.4)"}},
+      e('div', {style:{maxWidth:840,margin:"0 auto",padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between"}},
+        e('div', {style:{display:"flex",alignItems:"center",gap:12}},
+          e('div', {style:{width:46,height:46,background:"rgba(255,255,255,0.15)",borderRadius:14,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,border:"1.5px solid rgba(255,255,255,0.25)"}}, "🏥"),
+          e('div', null, e('div', {style:{color:"white",fontSize:22,fontWeight:700}}, "MedSaathiAI"), e('div', {style:{color:"rgba(255,255,255,0.7)",fontSize:11,fontStyle:"italic"}}, "Aapka Swasthya Saathi • आपका स्वास्थ्य साथी"))
+        ),
+        e('div', {style:{display:"flex",alignItems:"center",gap:12}},
+          e('div', {style:{display:"flex",alignItems:"center",gap:6}},
+            e('div', {style:{width:8,height:8,background:"#4ade80",borderRadius:"50%",animation:"pulse 2s infinite"}}),
+            e('span', {style:{color:"rgba(255,255,255,0.8)",fontSize:12}}, "Online")
+          ),
+          e('button', {onClick:logout, style:{background:"rgba(255,255,255,0.15)",border:"none",borderRadius:8,color:"white",padding:"6px 10px",fontSize:11,cursor:"pointer"}}, "Logout")
+        )
+      ),
+      e('div', {style:{maxWidth:840,margin:"0 auto",padding:"6px 20px 18px",textAlign:"center"}},
+        e('div', {style:{fontSize:32,marginBottom:4}}, "🩺"),
+        e('h1', {style:{color:"white",fontSize:18,fontWeight:700,marginBottom:4}}, "Aapka AI Health Companion"),
+        e('p', {style:{color:"rgba(255,255,255,0.82)",fontSize:12,lineHeight:1.5}}, "Symptoms se diet tak, medicines se reports tak — sab ek jagah. Hindi mein. 🇮🇳")
+      )
+    ),
+    e('div', {style:{maxWidth:840,margin:"-20px auto 0",padding:"0 16px 30px"}},
+      e('div', {style:{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:12,marginBottom:14}},
+        FEATURES.map(f => e('button', {key:f.id, onClick:()=>openFeature(f), style:{background:"white",border:"1.5px solid #d4eddf",borderRadius:18,padding:"18px 16px",textAlign:"left",cursor:"pointer",boxShadow:"0 2px 14px rgba(0,0,0,0.06)",transition:"all 0.2s"},
+          onMouseEnter:ev=>{ev.currentTarget.style.transform="translateY(-2px)";ev.currentTarget.style.borderColor=f.color;},
+          onMouseLeave:ev=>{ev.currentTarget.style.transform="translateY(0)";ev.currentTarget.style.borderColor="#d4eddf";}},
+          e('div', {style:{fontSize:28,marginBottom:8}}, f.icon),
+          e('div', {style:{fontSize:13,fontWeight:700,color:f.color,marginBottom:3}}, f.title),
+          e('div', {style:{fontSize:11,color:"#7a9e8a",lineHeight:1.5}}, f.desc)
+        ))
+      ),
+      e('div', {style:{background:"white",border:"1px solid #d4eddf",borderLeft:"4px solid #12a865",borderRadius:14,padding:"14px 16px",marginBottom:12}},
+        e('div', {style:{fontSize:11,color:"#7a9e8a",marginBottom:5,fontWeight:600}}, "💡 AAJ KA HEALTH TIP"),
+        e('div', {style:{fontSize:14,color:"#2d3748",lineHeight:1.7}}, HEALTH_TIPS[tipIdx])
+      ),
+      e('button', {onClick:()=>openFeature(FEATURES.find(f=>f.isEmergency)), style:{width:"100%",background:"linear-gradient(135deg,#7a1515,#c0392b)",border:"none",borderRadius:14,padding:"14px",color:"white",fontSize:14,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:10,boxShadow:"0 4px 16px rgba(192,57,43,0.3)"}},
+        "🚨 Emergency First Aid Guide — Turant Kya Karein 🚨"
+      ),
+      profileSaved && e('div', {style:{marginTop:12,background:"#e8f5ee",border:"1px solid #a8d5bf",borderRadius:12,padding:"10px 14px",display:"flex",alignItems:"center",gap:10,fontSize:13}},
+        e('span', null, "✅"),
+        e('span', {style:{color:"#0a5535",fontWeight:600}}, `Profile: ${profile.age}y ${profile.gender} • ${profile.history||"None"}`),
+        e('button', {onClick:()=>{setProfileSaved(false);setProfile({age:"",gender:"Male",weight:"",history:"",currentMeds:"",allergies:"",pregnant:"No"});}, style:{marginLeft:"auto",background:"none",border:"1px solid #0a6640",borderRadius:8,color:"#0a6640",padding:"3px 8px",cursor:"pointer",fontSize:11}}, "Update")
+      ),
+      e('p', {style:{textAlign:"center",color:"#9ab8ac",fontSize:11,marginTop:14,lineHeight:1.7}}, "⚕️ Emergency: 112 | Bina doctor ki salah medicine li aur nuksan hua to MedSaathiAI zimmedar nahi hoga")
+    ),
+    e(Footer, {onOpen:setLegalOpen})
+  );
+
+  if (screen === "profile") return e('div', {style:{minHeight:"100vh",background:"linear-gradient(160deg,#f0faf5,#e8f5ee)"}},
+    e('div', {style:{background:"linear-gradient(135deg,#0a5535,#12a865)",padding:"14px 20px",display:"flex",alignItems:"center",gap:12,position:"sticky",top:0,zIndex:10}},
+      e('button', {onClick:()=>setScreen("home"), style:{background:"rgba(255,255,255,0.15)",border:"none",borderRadius:8,color:"white",width:36,height:36,cursor:"pointer",fontSize:18}}, "←"),
+      e('div', {style:{color:"white",fontWeight:700,fontSize:16}}, "📋 Patient Profile")
+    ),
+    e('div', {style:{maxWidth:600,margin:"0 auto",padding:"20px 16px 40px"}},
+      e('div', {style:{textAlign:"center",marginBottom:20}},
+        e('div', {style:{fontSize:38,marginBottom:8}}, "🩺"),
+        e('h2', {style:{color:"#0a5535",fontSize:18,fontWeight:700,marginBottom:6}}, "Pehle thodi details do"),
+        e('p', {style:{color:"#4a7c6a",fontSize:13}}, "Taaki safe aur personalized advice mil sake")
+      ),
+      e('div', {style:{display:"flex",flexDirection:"column",gap:13}},
+        ...[
+          {key:"age",label:"Umar (Age)",placeholder:"e.g. 35",type:"text",icon:"🎂",req:true},
+          {key:"gender",label:"Gender",type:"select",icon:"👤",opts:["Male","Female","Other"]},
+          {key:"weight",label:"Weight (kg)",placeholder:"e.g. 70",type:"text",icon:"⚖️"},
+          {key:"history",label:"Bimari ki History",placeholder:"Diabetes, BP... (koi nahi to khaali chhodo)",type:"text",icon:"📋"},
+          {key:"currentMeds",label:"Current Medicines",placeholder:"Jo abhi le rahe ho... (koi nahi to khaali chhodo)",type:"text",icon:"💊"},
+          {key:"allergies",label:"Allergy History",placeholder:"Penicillin... (koi nahi to khaali chhodo)",type:"text",icon:"🤧"},
+          {key:"pregnant",label:"Pregnant/Breastfeeding?",type:"select",icon:"🤰",opts:["No","Pregnant","Breastfeeding","N/A (Male)"]},
+        ].map(f => e('div', {key:f.key},
+          e('label', {style:{display:"flex",alignItems:"center",gap:6,fontSize:13,fontWeight:600,color:"#0a5535",marginBottom:5}},
+            f.icon, " ", f.label, f.req && e('span', {style:{color:"#e53e3e",fontSize:11}}, "*")
+          ),
+          f.type==="select"
+            ? e('select', {value:profile[f.key], onChange:ev=>setProfile(p=>({...p,[f.key]:ev.target.value})), style:{width:"100%",border:`2px solid ${errors[f.key]?"#e53e3e":"#c8e6d4"}`,borderRadius:10,padding:"10px 12px",fontSize:14,background:"white",color:"#2d3748",outline:"none"}},
+                f.opts.map(o => e('option', {key:o}, o))
+              )
+            : e('input', {value:profile[f.key], onChange:ev=>setProfile(p=>({...p,[f.key]:ev.target.value})), placeholder:f.placeholder, style:{width:"100%",border:`2px solid ${errors[f.key]?"#e53e3e":"#c8e6d4"}`,borderRadius:10,padding:"10px 12px",fontSize:14,background:"white",color:"#2d3748",outline:"none"}}),
+          errors[f.key] && e('div', {style:{color:"#e53e3e",fontSize:12,marginTop:3}}, "⚠️ ", errors[f.key])
+        )),
+        e('button', {onClick:saveProfile, style:{background:"linear-gradient(135deg,#12a865,#0a5535)",color:"white",border:"none",borderRadius:12,padding:"14px",fontSize:15,fontWeight:700,cursor:"pointer",marginTop:6}}, "✅ Profile Save Karo — Shuru Karein"),
+        e('p', {style:{textAlign:"center",color:"#9ab8ac",fontSize:11,fontStyle:"italic"}}, "🔒 Info sirf is session mein • Kuch bhi save nahi hota")
+      )
+    )
+  );
+
+  if (screen === "feature" && activeF && activeF.isEmergency) return e('div', {style:{minHeight:"100vh",background:"#fff8f8"}},
+    e('div', {style:{background:"linear-gradient(135deg,#7a1515,#c0392b)",padding:"14px 20px",display:"flex",alignItems:"center",gap:12,position:"sticky",top:0,zIndex:10}},
+      e('button', {onClick:()=>setScreen("home"), style:{background:"rgba(255,255,255,0.15)",border:"none",borderRadius:8,color:"white",width:36,height:36,cursor:"pointer",fontSize:18}}, "←"),
+      e('div', {style:{color:"white",fontWeight:700,fontSize:16}}, "🚨 Emergency First Aid Guide")
+    ),
+    e('div', {style:{maxWidth:840,margin:"0 auto",padding:16}},
+      e('div', {style:{background:"#ffe8e8",border:"2px solid #fc8181",borderRadius:12,padding:"12px 16px",marginBottom:14,textAlign:"center",fontSize:14,color:"#742a2a",fontWeight:700}}, "🚨 Kisi bhi emergency mein PEHLE 112 call karein!"),
+      e('div', {style:{display:"flex",flexDirection:"column",gap:10}},
+        EMERGENCY_DATA.map((tip, i) => e('div', {key:i, style:{background:"white",border:"1.5px solid #fca5a5",borderRadius:14,overflow:"hidden"}},
+          e('button', {onClick:()=>setOpenEmerg(openEmerg===i?null:i), style:{width:"100%",padding:"14px 18px",background:"none",border:"none",textAlign:"left",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between"}},
+            e('span', {style:{fontSize:15,fontWeight:700,color:"#7a1515"}}, tip.title),
+            e('span', {style:{fontSize:14,color:"#7a1515"}}, openEmerg===i?"▲":"▼")
+          ),
+          openEmerg===i && e('div', {style:{padding:"0 18px 18px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}},
+            e('div', null,
+              e('div', {style:{fontSize:11,fontWeight:700,color:"#7a1515",marginBottom:8}}, "⚠️ PEHCHANO"),
+              tip.signs.map((s,j) => e('div', {key:j, style:{fontSize:13,color:"#2d3748",padding:"4px 0",borderBottom:"1px solid #fff0f0",display:"flex",gap:6}}, e('span', {style:{color:"#c0392b"}}, "•"), s))
+            ),
+            e('div', null,
+              e('div', {style:{fontSize:11,fontWeight:700,color:"#0a5535",marginBottom:8}}, "✅ TURANT KARO"),
+              tip.action.map((a,j) => e('div', {key:j, style:{fontSize:13,color:"#2d3748",padding:"4px 0",borderBottom:"1px solid #f0fff8",display:"flex",gap:6}}, e('span', {style:{color:"#0a6640",fontWeight:700}}, `${j+1}.`), a))
+            )
+          )
+        ))
+      ),
+      e('div', {style:{marginTop:14,background:"#fff0f0",border:"1px solid #fca5a5",borderRadius:12,padding:"12px 16px",textAlign:"center",fontSize:13,color:"#742a2a"}},
+        "📞 ", e('strong', null, "112"), " (All) • ", e('strong', null, "102"), " (Ambulance) • ", e('strong', null, "108"), " (Medical)"
+      )
+    )
+  );
+
+  if (screen === "feature" && activeF) return e('div', {style:{height:"100vh",display:"flex",flexDirection:"column",background:"linear-gradient(160deg,#f0faf5,#e8f5ee)"}},
+    e('div', {style:{background:activeF.grad,padding:"12px 18px",display:"flex",alignItems:"center",gap:12,flexShrink:0,boxShadow:"0 2px 16px rgba(0,0,0,0.2)"}},
+      e('button', {onClick:()=>setScreen("home"), style:{background:"rgba(255,255,255,0.15)",border:"none",borderRadius:8,color:"white",width:34,height:34,cursor:"pointer",fontSize:18}}, "←"),
+      e('span', {style:{fontSize:22}}, activeF.icon),
+      e('div', null,
+        e('div', {style:{color:"white",fontWeight:700,fontSize:15}}, activeF.title),
+        e('div', {style:{color:"rgba(255,255,255,0.75)",fontSize:11}}, activeF.sub)
+      ),
+      activeF.id==="ask" && profileSaved && e('div', {style:{marginLeft:"auto",background:"rgba(255,255,255,0.18)",borderRadius:10,padding:"4px 10px",fontSize:11,color:"white"}}, `👤 ${profile.age}y ${profile.gender}`)
+    ),
+    e(ChatPane, {key:activeF.id, feature:activeF, profileCtx: activeF.id==="ask"?profileCtx:""})
+  );
+
+  return null;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+</script>
+</body>
+</html>
