@@ -26,8 +26,13 @@ module.exports = async (req, res) => {
     const order = await response.json();
 
     if (!response.ok) {
-      return res.status(500).json({ error: 'Order create nahi ho paya', details: order });
-      return res.status(500).json({ error: 'Order create nahi ho paya' });
+      console.error('Razorpay order error:', order);
+      return res.status(500).json({
+        error: 'Order create nahi ho paya',
+        details: order,
+        debugKeyIdLen: keyId ? keyId.length : 0,
+        debugSecretLen: keySecret ? keySecret.length : 0
+      });
     }
 
     return res.status(200).json({
@@ -38,7 +43,6 @@ module.exports = async (req, res) => {
     });
   } catch (err) {
     console.error('create-order error:', err);
-    return res.status(500).json({ error: 'Order create nahi ho paya' });
+    return res.status(500).json({ error: 'Order create nahi ho paya', details: err.message });
   }
 };
-
