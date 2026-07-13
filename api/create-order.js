@@ -26,7 +26,7 @@ module.exports = async (req, res) => {
     const order = await response.json();
 
     if (!response.ok) {
-      console.error('Razorpay order error:', order);
+      return res.status(500).json({ error: 'Order create nahi ho paya', details: order });
       return res.status(500).json({ error: 'Order create nahi ho paya' });
     }
 
