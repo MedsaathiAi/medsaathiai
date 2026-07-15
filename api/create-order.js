@@ -1,25 +1,20 @@
 module.exports = async (req, res) => {
-  if (req.method !== 'POST') {
-    return res.status(405).json({
-      error: 'Method not allowed'
-    });
-  }
-
   try {
-    const keyId = process.env.RAZORPAY_KEY_ID;
-    const keySecret = process.env.RAZORPAY_KEY_SECRET;
-    const testVar = process.env.TEST_VAR;
-
     return res.status(200).json({
-      message: "NEW CODE WORKING",
-      testVar: testVar || null,
-      keyIdExists: !!keyId,
-      keySecretExists: !!keySecret
+      success: true,
+      message: "API WORKING",
+      method: req.method,
+      env: {
+        RAZORPAY_KEY_ID: !!process.env.RAZORPAY_KEY_ID,
+        RAZORPAY_KEY_SECRET: !!process.env.RAZORPAY_KEY_SECRET,
+        TEST_VAR: process.env.TEST_VAR || null,
+      },
     });
-
   } catch (err) {
     return res.status(500).json({
-      error: err.message
+      success: false,
+      error: err.message,
+      stack: err.stack,
     });
   }
 };
