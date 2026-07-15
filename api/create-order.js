@@ -4,6 +4,9 @@ module.exports = async (req, res) => {
   }
 
   try {
+    return res.status(200).json({
+  message: "NEW CODE WORKING"
+}); \
     const keyId = process.env.RAZORPAY_KEY_ID;
 const keySecret = process.env.RAZORPAY_KEY_SECRET;
     const testVar = process.env.TEST_VAR;
