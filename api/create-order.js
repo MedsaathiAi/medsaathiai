@@ -6,6 +6,7 @@ module.exports = async (req, res) => {
   try {
     const keyId = process.env.RAZORPAY_KEY_ID;
 const keySecret = process.env.RAZORPAY_KEY_SECRET;
+    const testVar = process.env.TEST_VAR;
     if (!keyId || !keySecret) {
   return res.status(500).json({
     error: "Missing Razorpay credentials",
@@ -15,6 +16,9 @@ const keySecret = process.env.RAZORPAY_KEY_SECRET;
 }
     console.log("KEY_ID:", keyId);
 console.log("SECRET_LENGTH:", keySecret ? keySecret.length : 0);
+    return res.status(200).json({
+  testVar
+});
     const auth = Buffer.from(keyId + ':' + keySecret).toString('base64');
 
     const amountInPaise = 14900; // ₹149
