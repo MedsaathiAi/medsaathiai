@@ -12,7 +12,7 @@ module.exports = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Missing payment details' });
     }
 
-    const keySecret = H6Q488wEEonyHjo96GNYnA1c
+    const keySecret = process.env.RAZORPAY_KEY_SECRET;
 
     const body = razorpay_order_id + '|' + razorpay_payment_id;
     const expectedSignature = crypto
