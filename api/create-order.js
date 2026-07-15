@@ -4,8 +4,8 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const keyId = 'rzp_live_TCuW1ZIdkbo4Zo';
-    const keySecret = '1V5oAntjFTMK609YMwki33IN';
+    const keyId = rzp_live_TDgOa3Hs7oxvNm
+    const keySecret = H6Q488wEEonyHjo96GNYnA1c
     const auth = Buffer.from(keyId + ':' + keySecret).toString('base64');
 
     const amountInPaise = 14900; // ₹149
