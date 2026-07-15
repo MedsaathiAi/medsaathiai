@@ -6,6 +6,8 @@ module.exports = async (req, res) => {
   try {
     const keyId = process.env.RAZORPAY_KEY_ID;
 const keySecret = process.env.RAZORPAY_KEY_SECRET;
+    console.log("KEY_ID:", keyId);
+console.log("SECRET_LENGTH:", keySecret ? keySecret.length : 0);
     const auth = Buffer.from(keyId + ':' + keySecret).toString('base64');
 
     const amountInPaise = 14900; // ₹149
