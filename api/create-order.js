@@ -14,7 +14,7 @@ console.log("SECRET_EXISTS:", !!process.env.RAZORPAY_KEY_SECRET);
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": Basic ${auth}
+        "Authorization": `Basic ${auth}`
       },
       body: JSON.stringify({
         amount: 14900,
