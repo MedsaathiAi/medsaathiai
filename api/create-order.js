@@ -26,16 +26,14 @@ console.log("SECRET_EXISTS:", !!process.env.RAZORPAY_KEY_SECRET);
     const data = await response.json();
     console.log("STATUS:", response.status);
 console.log("RAZORPAY RESPONSE:", JSON.stringify(data));
-
-    if (!response.ok) {
-      return res.status(response.status).json(data);
-    }
-
-    return res.status(200).json({
-      success: true,
-      order: data,
-      key: process.env.RAZORPAY_KEY_ID
-    });
+return res.status(200).json({
+  key: process.env.RAZORPAY_KEY_ID,
+  secretExists: !!process.env.RAZORPAY_KEY_SECRET,
+  keyLength: (process.env.RAZORPAY_KEY_ID || "").length,
+  secretLength: (process.env.RAZORPAY_KEY_SECRET || "").length,
+  razorpayStatus: response.status,
+  razorpayResponse: data
+});
 
   } catch (err) {
     console.error(err);
