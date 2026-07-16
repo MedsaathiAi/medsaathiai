@@ -7,14 +7,14 @@ module.exports = async (req, res) => {
     console.log("KEY_ID:", process.env.RAZORPAY_KEY_ID);
 console.log("SECRET_EXISTS:", !!process.env.RAZORPAY_KEY_SECRET);
     const auth = Buffer.from(
-  `${process.env.RAZORPAY_KEY_ID}:${process.env.RAZORPAY_KEY_SECRET}`
+  ${process.env.RAZORPAY_KEY_ID}:${process.env.RAZORPAY_KEY_SECRET}
 ).toString("base64");
 
     const response = await fetch("https://api.razorpay.com/v1/orders", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Basic ${auth}`
+        "Authorization": Basic ${auth}
       },
       body: JSON.stringify({
         amount: 14900,
