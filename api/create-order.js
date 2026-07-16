@@ -4,6 +4,8 @@ module.exports = async (req, res) => {
   }
 
   try {
+    console.log("KEY_ID:", process.env.RAZORPAY_KEY_ID);
+console.log("SECRET_EXISTS:", !!process.env.RAZORPAY_KEY_SECRET);
     const auth = Buffer.from(
       `${process.env.RAZORPAY_KEY_ID}:${process.env.RAZORPAY_KEY_SECRET}`
     ).toString("base64");
