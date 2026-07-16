@@ -36,10 +36,12 @@ module.exports = async (req, res) => {
     }
 
     return res.status(200).json({
-      success: true,
-      order: data,
-      key: process.env.RAZORPAY_KEY_ID
-    });
+  success: true,
+  orderId: data.id,
+  amount: data.amount,
+  currency: data.currency,
+  keyId: process.env.RAZORPAY_KEY_ID
+});
 
   } catch (err) {
     console.error(err);
