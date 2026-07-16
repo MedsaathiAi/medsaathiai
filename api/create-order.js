@@ -25,7 +25,7 @@ console.log("SECRET_EXISTS:", !!process.env.RAZORPAY_KEY_SECRET);
 
     const data = await response.json();
     console.log("STATUS:", response.status);
-console.log("RAZORPAY RESPONSE:", JSON.stringify(order));
+console.log("RAZORPAY RESPONSE:", JSON.stringify(data));
 
     if (!response.ok) {
       return res.status(response.status).json(data);
