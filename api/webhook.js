@@ -10,23 +10,10 @@ if (!admin.apps.length) {
   });
 }
 
-function getRawBody(req) {
-  return new Promise((resolve, reject) => {
-    let data = "";
-    req.on("data", chunk => { data += chunk; });
-    req.on("end", () => resolve(data));
-    req.on("error", reject);
-  });
-}
-
-module.exports = async (req, res) => {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
-
+module.exports.POST = async function (request) {
   try {
-    const rawBody = await getRawBody(req);
-    const signature = req.headers["x-razorpay-signature"];
+    const rawBody = await request.text();
+    const signature = request.headers.get("x-razorpay-signature");
 
     const expectedSignature = crypto
       .createHmac("sha256", process.env.RAZORPAY_WEBHOOK_SECRET)
@@ -34,7 +21,10 @@ module.exports = async (req, res) => {
       .digest("hex");
 
     if (expectedSignature !== signature) {
-      return res.status(400).json({ error: "Invalid signature" });
+      return new Response(JSON.stringify({ error: "Invalid signature" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" }
+      });
     }
 
     const event = JSON.parse(rawBody);
@@ -53,16 +43,16 @@ module.exports = async (req, res) => {
       }
     }
 
-    return res.status(200).json({ success: true });
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    });
 
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ success: false, error: err.message });
-  }
-};
-
-module.exports.config = {
-  api: {
-    bodyParser: false
+    return new Response(JSON.stringify({ success: false, error: err.message }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" }
+    });
   }
 };
