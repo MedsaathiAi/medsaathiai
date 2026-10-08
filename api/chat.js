@@ -11,13 +11,30 @@ export default async function handler(req, res) {
         "anthropic-version": "2023-06-01",
         "content-type": "application/json"
       },
-      body: JSON.stringify(req.body)
+      body: JSON.stringify({ ...req.body, stream: true })
     });
 
-    const data = await response.json();
-return res.status(200).json(data);
+    if (!response.ok || !response.body) {
+      const errText = await response.text();
+      return res.status(response.status || 500).send(errText);
+    }
+
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("X-Accel-Buffering", "no");
+
+    const reader = response.body.getReader();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      res.write(Buffer.from(value));
+    }
+    res.end();
 
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    if (!res.headersSent) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.end();
   }
 }
